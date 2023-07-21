@@ -1,12 +1,12 @@
 
 import Sharp from 'sharp';
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
 const client = new S3Client({})
 
 
 export const handler = async (event) => {
   const { key } = event.Records[0].s3.object;
-
+  const fileExtension = "";
 
   async function getFileAsBuffer() {
     try {
@@ -26,7 +26,6 @@ export const handler = async (event) => {
         });
   
         var originalImage = await client.send(command);
-        console.log(originalImage);
         return await streamToBuffer(originalImage.Body);
     } catch (err) {
         console.log("Error", err);
@@ -43,7 +42,7 @@ export const handler = async (event) => {
       });
 
       const response = await client.send(command);
-      console.log(response);
+      console.log("UPLOAD SUCCESS");
 
     } catch (err) {
       console.error(err);
@@ -52,21 +51,27 @@ export const handler = async (event) => {
     return true;
   }
 
-  
+  // get extension
+  function getExtension() {
+     //Get the file Extension     
+     return (key.split('.').pop());
+  }
+
+
   // processing image
-  const fileBuffer = await getFileAsBuffer();
+    const fileBuffer = await getFileAsBuffer();
 
-  const compressedImagePromise = Sharp(fileBuffer)
-    .toFormat('jpeg')
-    .jpeg({
-        force: true,
-    })
-    .resize({
-      width: 1000,
-      withoutEnlargement: true,
-    })
-    .toBuffer();
-
+    const compressedImagePromise = Sharp(fileBuffer)
+      .toFormat('jpeg')
+      .jpeg({
+          force: true,
+      })
+      .resize({
+        width: 1000,
+        withoutEnlargement: true,
+      })
+      .toBuffer();
+  
 
   try {
     // try to compress file
@@ -74,13 +79,37 @@ export const handler = async (event) => {
       compressedImagePromise
     ]);
 
-    // if success upload to s3
-    await upload(compressedImage);
-    return;
+    // excludes upload compress file (gif)
+    if(getExtension().includes("gif")){
+      throw new Error('Is Excluded');
 
-  } catch {
+    } else {
+      // if success upload to s3
+      await upload(compressedImage);
+
+    }
+
+    
+  } catch (err) {
     // if error happens then upload the original file to bucket instead
     await upload(fileBuffer);
-    return;
   }
+
+
+
+  // delete original file
+  try {
+    const command = new DeleteObjectCommand({
+      Bucket: process.env.UNCOMPRESSED_BUCKET,
+      Key: key,
+    });
+
+    const response = await client.send(command);
+    console.log("DELETE SUCCESS");
+
+  } catch (err) {
+    console.error(err);
+  }
+
+
 };
