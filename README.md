@@ -42,4 +42,4 @@ zip -r deploy.zip .
 
 
 # Infrastructure
-<img src="/img/infrastructure.png" width="300px"></img>
+<img src="/img/infrastructure.png" width="700px"></img>
